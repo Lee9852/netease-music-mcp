@@ -85,11 +85,24 @@ def play_music(params):
             "link": f"https://music.163.com/#/song?id={s['id']}"}
 
 def get_play_history(params):
-    """Get play history (weekly or all-time)."""
+    """Get play history rankings (weekly or all-time) for the logged-in user."""
     all_time = str(params.get('all_time', 'false')).lower() == 'true'
     limit = int(params.get('limit', 30))
     rec_type = 0 if all_time else 1
-    result = netease_request(f'/api/v1/play/record?type={rec_type}&limit={limit}', method='GET')
+
+    # Resolve the currently logged-in user's UID first. NetEase's play-record
+    # endpoint may reject authenticated requests that omit uid.
+    uid_result = netease_request('/api/w/nuser/account/get', method='GET')
+    if not uid_result or uid_result.get('code') != 200:
+        return {"error": "Failed to get user info", "detail": uid_result}
+    uid = uid_result.get('account', {}).get('id')
+    if not uid:
+        return {"error": "Cannot determine user ID", "detail": uid_result}
+
+    result = netease_request(
+        f'/api/v1/play/record?uid={uid}&type={rec_type}&limit={limit}',
+        method='GET'
+    )
     if not result or result.get('code') != 200:
         return {"error": "Failed to get play history", "detail": result}
     key = 'allData' if all_time else 'weekData'
