@@ -1,5 +1,19 @@
 # 🎶 netease-music-mcp v3.1
 
+> [!NOTE]
+> **Fork / Attribution Notice**
+>
+> This repository is a personal-use fork of [Vael-KY/netease-music-mcp](https://github.com/Vael-KY/netease-music-mcp).
+> The original project, design, and core implementation belong to the upstream authors and contributors.
+>
+> This fork is maintained only for personal deployment and use. Local modifications mainly add:
+> - Bearer Token authentication for MCP access
+> - Render deployment compatibility
+> - Kelivo connection notes
+>
+> No claim is made to original authorship. The upstream attribution and MIT License are retained.
+
+
 让你的 AI 住进你的网易云。
 
 不是模拟，也不是记录在本地的歌名列表 —— ta 真的在操作你的网易云账号。翻歌单、建歌单、搜歌、塞歌、排序、读歌词、看你凌晨在循环什么、翻你的红心列表、帮你从私人FM和每日推荐里挑歌。
