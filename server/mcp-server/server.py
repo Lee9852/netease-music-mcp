@@ -7,7 +7,7 @@ for playlist management, music discovery, and listening history analysis.
 GitHub: https://github.com/Vael-KY/netease-music-mcp
 License: MIT
 """
-import http.server, json, os, urllib.request, urllib.parse, threading, uuid, time, logging, hmac
+import http.server, json, os, urllib.request, urllib.parse, threading, uuid, time, logging, hmac, html
 from http.server import HTTPServer
 
 # --- Configuration ---
@@ -70,6 +70,34 @@ def search_song(params):
         output.append(f"{i}. {s['name']} - {artists} (ID:{s['id']})")
     return {"results": output}
 
+def _get_playable_audio_url(song_id):
+    """Best-effort lookup of a temporary NetEase audio URL.
+
+    This is additive: failure must never break the original v3.1 play_music
+    behavior, because availability depends on account rights and NetEase APIs.
+    """
+    attempts = [
+        (
+            f'/api/song/enhance/player/url/v1?id={song_id}&ids=%5B{song_id}%5D&level=standard&encodeType=mp3',
+            None,
+            'GET',
+        ),
+        (
+            '/api/song/enhance/player/url',
+            {'ids': json.dumps([song_id]), 'br': 128000},
+            'POST',
+        ),
+    ]
+    for path, data, method in attempts:
+        result = netease_request(path, data=data, method=method)
+        if not result or result.get('code') != 200:
+            continue
+        items = result.get('data', [])
+        if items and items[0].get('url'):
+            return items[0]['url']
+    return None
+
+
 def play_music(params):
     """Search and format a song for playback."""
     query = params.get('query', '')
@@ -79,10 +107,44 @@ def play_music(params):
     songs = result.get('result', {}).get('songs', [])
     if not songs:
         return {"error": "No songs found"}
+
     s = songs[0]
     artists = ', '.join(a['name'] for a in s.get('artists', []))
-    return {"title": s['name'], "artist": artists, "id": s['id'],
-            "link": f"https://music.163.com/#/song?id={s['id']}"}
+    song_id = s['id']
+    output = {
+        "title": s['name'],
+        "artist": artists,
+        "id": song_id,
+        "link": f"https://music.163.com/#/song?id={song_id}",
+    }
+
+    # Kelivo's manual "Render Web View" path accepts raw HTML in message
+    # markdown. Keep the upstream fields above intact and add a player only
+    # when NetEase returns a temporary playable URL.
+    audio_url = _get_playable_audio_url(song_id)
+    if audio_url:
+        safe_url = html.escape(audio_url, quote=True)
+        safe_title = html.escape(s['name'])
+        safe_artist = html.escape(artists)
+        output["audio_url"] = audio_url
+        output["player_html"] = (
+            '<div style="padding:16px;border-radius:16px;background:#18181b;color:#fff;'
+            'font-family:system-ui,-apple-system,sans-serif;">'
+            f'<div style="font-size:18px;font-weight:700;margin-bottom:4px;">{safe_title}</div>'
+            f'<div style="font-size:14px;opacity:.72;margin-bottom:14px;">{safe_artist}</div>'
+            f'<audio controls preload="metadata" style="width:100%;" src="{safe_url}"></audio>'
+            '</div>'
+        )
+        output["kelivo_webview_hint"] = (
+            "For Kelivo manual Web View testing, place player_html verbatim in the assistant "
+            "message without a fenced code block, then use More > Render Web View."
+        )
+    else:
+        output["player_note"] = (
+            "No temporary playable audio URL was returned for this track/account. "
+            "The normal NetEase link is still available."
+        )
+    return output
 def get_play_history(params):
     """Get play history rankings (weekly or all-time) for the logged-in user."""
     all_time = str(params.get('all_time', 'false')).lower() == 'true'
