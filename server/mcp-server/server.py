@@ -71,48 +71,18 @@ def search_song(params):
     return {"results": output}
 
 def play_music(params):
-    """Resolve a song and return playback targets plus phone-control instructions."""
+    """Search and format a song for playback."""
     query = params.get('query', '')
-    result = netease_request(
-        f'/api/search/get?s={urllib.parse.quote(query)}&type=1&limit=1&offset=0',
-        method='GET'
-    )
+    result = netease_request(f'/api/search/get?s={urllib.parse.quote(query)}&type=1&limit=1&offset=0', method='GET')
     if not result or result.get('code') != 200:
         return {"error": "Search failed"}
     songs = result.get('result', {}).get('songs', [])
     if not songs:
         return {"error": "No songs found"}
-
     s = songs[0]
     artists = ', '.join(a['name'] for a in s.get('artists', []))
-    song_id = s['id']
-    exact_query = f"{s['name']} {artists}".strip()
-
-    return {
-        "title": s['name'],
-        "artist": artists,
-        "id": song_id,
-        "web_link": f"https://music.163.com/song?id={song_id}",
-        "deeplink": f"orpheus://song/{song_id}/?autoplay=1",
-        "search_query": exact_query,
-        "phone_action": {
-            "preferred": "If the client can open custom URI/deep links, open deeplink directly.",
-            "fallback": (
-                "If Android phone_control is available, continue automatically instead of only returning a link. "
-                "Open the NetEase Cloud Music app, then always read_screen first and identify the current page instead of assuming it opens on Recommendations/Home. If it opens on a now-playing/player screen whose timer or progress "
-                "updates continuously, do NOT keep using node-based tap on that dynamic screen because the accessibility "
-                "snapshot may become stale. First use system back if needed to reach a stable page, then read_screen. "
-                "Open search, enter the exact search_query, and select the matching song. On any continuously updating "
-                "screen, prefer coordinate tap/swipe using a fresh snapshot because coordinate gestures only require the "
-                "same active app/window and screen size, while node taps can be invalidated by changing text/timers. "
-                "After each navigation step, read_screen again when practical. Continue until playback actually starts. "
-                "Do not stop merely because a stale-snapshot error occurs; recover with a fresh read_screen and a "
-                "coordinate gesture or navigate back to a stable screen. Do not ask for confirmation unless multiple "
-                "results are genuinely ambiguous."
-            )
-        }
-    }
-
+    return {"title": s['name'], "artist": artists, "id": s['id'],
+            "link": f"https://music.163.com/#/song?id={s['id']}"}
 def get_play_history(params):
     """Get play history rankings (weekly or all-time) for the logged-in user."""
     all_time = str(params.get('all_time', 'false')).lower() == 'true'
@@ -393,7 +363,7 @@ def get_liked_songs(params):
 TOOLS = [
     {"name": "search_song", "description": "Search songs by keyword. Returns a list of matching songs with IDs.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search keyword"}, "limit": {"type": "integer", "description": "Max results (1-10, default 5)"}}, "required": ["query"]}},
-    {"name": "play_music", "description": "Resolve a song for playback. Returns the exact song, a NetEase deep link with autoplay, a web fallback, and robust Android phone_control instructions. When phone_control is available, continue automatically. NetEase player screens update continuously, so recover from stale accessibility snapshots by backing out to a stable screen and/or using coordinate gestures with fresh snapshots instead of relying only on node taps.",
+    {"name": "play_music", "description": "Search and play a song. Returns the top match with playback link."
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Song name or artist"}}, "required": ["query"]}},
     {"name": "get_play_history", "description": "Get play history rankings (weekly or all-time).",
      "inputSchema": {"type": "object", "properties": {"all_time": {"type": "boolean", "description": "true=all time, false=this week"}, "limit": {"type": "integer", "description": "Number of records (default 30)"}}}},
