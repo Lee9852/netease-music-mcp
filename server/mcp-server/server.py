@@ -71,18 +71,40 @@ def search_song(params):
     return {"results": output}
 
 def play_music(params):
-    """Search and format a song for playback."""
+    """Resolve a song and return playback targets plus phone-control instructions."""
     query = params.get('query', '')
-    result = netease_request(f'/api/search/get?s={urllib.parse.quote(query)}&type=1&limit=1&offset=0', method='GET')
+    result = netease_request(
+        f'/api/search/get?s={urllib.parse.quote(query)}&type=1&limit=1&offset=0',
+        method='GET'
+    )
     if not result or result.get('code') != 200:
         return {"error": "Search failed"}
     songs = result.get('result', {}).get('songs', [])
     if not songs:
         return {"error": "No songs found"}
+
     s = songs[0]
     artists = ', '.join(a['name'] for a in s.get('artists', []))
-    return {"title": s['name'], "artist": artists, "id": s['id'],
-            "link": f"https://music.163.com/#/song?id={s['id']}"}
+    song_id = s['id']
+    exact_query = f"{s['name']} {artists}".strip()
+
+    return {
+        "title": s['name'],
+        "artist": artists,
+        "id": song_id,
+        "web_link": f"https://music.163.com/song?id={song_id}",
+        "deeplink": f"orpheus://song/{song_id}/?autoplay=1",
+        "search_query": exact_query,
+        "phone_action": {
+            "preferred": "If the client can open custom URI/deep links, open deeplink directly.",
+            "fallback": (
+                "If Android phone_control is available, continue automatically instead of only returning a link: "
+                "open the NetEase Cloud Music app, read the screen, enter search, search the exact search_query, "
+                "tap the matching song, and start playback. Re-read the screen between UI actions. "
+                "Do not ask for confirmation unless multiple results are genuinely ambiguous."
+            )
+        }
+    }
 
 def get_play_history(params):
     """Get play history rankings (weekly or all-time) for the logged-in user."""
@@ -364,7 +386,7 @@ def get_liked_songs(params):
 TOOLS = [
     {"name": "search_song", "description": "Search songs by keyword. Returns a list of matching songs with IDs.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search keyword"}, "limit": {"type": "integer", "description": "Max results (1-10, default 5)"}}, "required": ["query"]}},
-    {"name": "play_music", "description": "Search and play a song. Returns the top match with playback link.",
+    {"name": "play_music", "description": "Resolve a song for playback. Returns the exact song, a NetEase deep link with autoplay, a web fallback, and instructions for Android phone_control. When phone_control is available, continue automatically to open NetEase, search the exact song, tap it, and start playback instead of stopping at a link.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Song name or artist"}}, "required": ["query"]}},
     {"name": "get_play_history", "description": "Get play history rankings (weekly or all-time).",
      "inputSchema": {"type": "object", "properties": {"all_time": {"type": "boolean", "description": "true=all time, false=this week"}, "limit": {"type": "integer", "description": "Number of records (default 30)"}}}},
