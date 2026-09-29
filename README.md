@@ -143,6 +143,7 @@ MCP_PORT=3456
 NETEASE_COOKIE=MUSIC_U=你的值
 NETEASE_CSRF=你的csrf值
 MCP_PORT=3456
+MCP_AUTH_TOKEN=请设置一串足够长的随机密码
 ```
 
 ### 4. 启动
@@ -162,6 +163,14 @@ python3 server.py
 ```
 http://你的服务器IP:3456/mcp
 ```
+
+并为请求添加 Header：
+
+```
+Authorization: Bearer 你的MCP_AUTH_TOKEN
+```
+
+未携带正确 Bearer Token 的 MCP 请求会被拒绝；`/health` 保持公开用于健康检查。
 
 应该显示 18 个工具已连接。
 
@@ -208,14 +217,22 @@ Zeabur部署：
 
 3. Start Command 填：`python3 server.py`
 
-4. 环境变量里加两个：
+4. 环境变量里添加：
 
    - `MCP_PORT` = `8080`（Zeabur默认暴露这个）
-   - `NETEASE_COOKIE` = `MUSIC_U=你的值; __csrf=你的值`
+   - `NETEASE_COOKIE` = `MUSIC_U=你的值`
+   - `NETEASE_CSRF` = `你的__csrf值`
+   - `MCP_AUTH_TOKEN` = `一串足够长的随机密码`
 
 5. 端口设置里暴露 `8080`，协议选 HTTP
 
-6. 部署完之后MCP端点就是：`https://你的应用名.zeabur.app/mcp`
+6. 部署完之后 MCP 端点就是：`https://你的应用名.zeabur.app/mcp`
+
+7. Kelivo 选择 Streamable HTTP，并添加 Header：
+
+   ```
+   Authorization: Bearer 你的MCP_AUTH_TOKEN
+   ```
 
 Railway或其他也类似
 
