@@ -7,7 +7,7 @@ for playlist management, music discovery, and listening history analysis.
 GitHub: https://github.com/Vael-KY/netease-music-mcp
 License: MIT
 """
-import http.server, json, os, urllib.request, urllib.parse, threading, uuid, time, logging
+import http.server, json, os, urllib.request, urllib.parse, threading, uuid, time, logging, hmac
 from http.server import HTTPServer
 
 # --- Configuration ---
@@ -15,6 +15,7 @@ NETEASE_COOKIE = os.environ.get("NETEASE_COOKIE", "")
 NETEASE_CSRF = os.environ.get("NETEASE_CSRF", "")
 PORT = int(os.environ.get("MCP_PORT", "3456"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+MCP_AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "").strip()
 SESSION_ID = str(uuid.uuid4())
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -434,8 +435,10 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', '*')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, MCP-Protocol-Version, Mcp-Session-Id')
+
     def _json_response(self, data, status=200):
+
         body = json.dumps(data).encode()
         self.send_response(status)
         self._cors()
@@ -443,18 +446,53 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Content-Length', len(body))
         self.end_headers()
         self.wfile.write(body)
+
+    def _authorized(self):
+        """Validate Authorization: Bearer <MCP_AUTH_TOKEN> using constant-time comparison."""
+        if not MCP_AUTH_TOKEN:
+            return False
+        auth_header = self.headers.get('Authorization', '')
+        scheme, separator, token = auth_header.partition(' ')
+        return (
+            bool(separator)
+            and scheme.lower() == 'bearer'
+            and hmac.compare_digest(token.strip(), MCP_AUTH_TOKEN)
+        )
+
+    def _require_auth(self):
+        """Fail closed when auth is missing or misconfigured."""
+        if self._authorized():
+            return True
+        if not MCP_AUTH_TOKEN:
+            logger.error("Rejected MCP request: MCP_AUTH_TOKEN is not configured")
+            self._json_response({"error": "MCP_AUTH_TOKEN is not configured"}, 503)
+        else:
+            logger.warning("Rejected unauthorized MCP request")
+            self._json_response({"error": "Unauthorized"}, 401)
+        return False
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._cors()
         self.end_headers()
     def do_GET(self):
         if self.path == '/health':
-            self._json_response({"status": "ok", "tools": len(TOOLS), "version": "3.1.0"})
+            self._json_response({
+                "status": "ok",
+                "tools": len(TOOLS),
+                "version": "3.1.0",
+                "auth_configured": bool(MCP_AUTH_TOKEN),
+            })
         elif self.path == '/sse':
+            if not self._require_auth():
+                return
             self._handle_sse()
         else:
             self._json_response({"error": "Not found"}, 404)
+
     def do_POST(self):
+        if not self._require_auth():
+            return
         length = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(length)) if length else {}
         method = body.get('method', '')
@@ -523,6 +561,10 @@ class ThreadedHTTPServer(HTTPServer):
 
 if __name__ == '__main__':
     logger.info(f"Starting NetEase Music MCP Server v3.1.0 with {len(TOOLS)} tools on port {PORT}")
+    if MCP_AUTH_TOKEN:
+        logger.info("Bearer-token authentication is enabled")
+    else:
+        logger.error("MCP_AUTH_TOKEN is not configured; protected MCP requests will be rejected")
     server = ThreadedHTTPServer(('0.0.0.0', PORT), MCPHandler)
     try:
         server.serve_forever()
