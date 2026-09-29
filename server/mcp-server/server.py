@@ -98,10 +98,17 @@ def play_music(params):
         "phone_action": {
             "preferred": "If the client can open custom URI/deep links, open deeplink directly.",
             "fallback": (
-                "If Android phone_control is available, continue automatically instead of only returning a link: "
-                "open the NetEase Cloud Music app, read the screen, enter search, search the exact search_query, "
-                "tap the matching song, and start playback. Re-read the screen between UI actions. "
-                "Do not ask for confirmation unless multiple results are genuinely ambiguous."
+                "If Android phone_control is available, continue automatically instead of only returning a link. "
+                "Open the NetEase Cloud Music app. If it opens on a now-playing/player screen whose timer or progress "
+                "updates continuously, do NOT keep using node-based tap on that dynamic screen because the accessibility "
+                "snapshot may become stale. First use system back if needed to reach a stable page, then read_screen. "
+                "Open search, enter the exact search_query, and select the matching song. On any continuously updating "
+                "screen, prefer coordinate tap/swipe using a fresh snapshot because coordinate gestures only require the "
+                "same active app/window and screen size, while node taps can be invalidated by changing text/timers. "
+                "After each navigation step, read_screen again when practical. Continue until playback actually starts. "
+                "Do not stop merely because a stale-snapshot error occurs; recover with a fresh read_screen and a "
+                "coordinate gesture or navigate back to a stable screen. Do not ask for confirmation unless multiple "
+                "results are genuinely ambiguous."
             )
         }
     }
@@ -386,7 +393,7 @@ def get_liked_songs(params):
 TOOLS = [
     {"name": "search_song", "description": "Search songs by keyword. Returns a list of matching songs with IDs.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search keyword"}, "limit": {"type": "integer", "description": "Max results (1-10, default 5)"}}, "required": ["query"]}},
-    {"name": "play_music", "description": "Resolve a song for playback. Returns the exact song, a NetEase deep link with autoplay, a web fallback, and instructions for Android phone_control. When phone_control is available, continue automatically to open NetEase, search the exact song, tap it, and start playback instead of stopping at a link.",
+    {"name": "play_music", "description": "Resolve a song for playback. Returns the exact song, a NetEase deep link with autoplay, a web fallback, and robust Android phone_control instructions. When phone_control is available, continue automatically. NetEase player screens update continuously, so recover from stale accessibility snapshots by backing out to a stable screen and/or using coordinate gestures with fresh snapshots instead of relying only on node taps.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Song name or artist"}}, "required": ["query"]}},
     {"name": "get_play_history", "description": "Get play history rankings (weekly or all-time).",
      "inputSchema": {"type": "object", "properties": {"all_time": {"type": "boolean", "description": "true=all time, false=this week"}, "limit": {"type": "integer", "description": "Number of records (default 30)"}}}},
