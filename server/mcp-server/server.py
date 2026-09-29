@@ -99,7 +99,7 @@ def play_music(params):
             "preferred": "If the client can open custom URI/deep links, open deeplink directly.",
             "fallback": (
                 "If Android phone_control is available, continue automatically instead of only returning a link. "
-                "Open the NetEase Cloud Music app. If it opens on a now-playing/player screen whose timer or progress "
+                "Open the NetEase Cloud Music app, then always read_screen first and identify the current page instead of assuming it opens on Recommendations/Home. If it opens on a now-playing/player screen whose timer or progress "
                 "updates continuously, do NOT keep using node-based tap on that dynamic screen because the accessibility "
                 "snapshot may become stale. First use system back if needed to reach a stable page, then read_screen. "
                 "Open search, enter the exact search_query, and select the matching song. On any continuously updating "
